@@ -9,6 +9,7 @@ import (
 	"net/rpc"
 	"os"
 	"sort"
+	"time"
 )
 
 // for sorting by key.
@@ -44,9 +45,32 @@ func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	// Your worker implementation here.
+	for {
+		time.Sleep(1 * time.Second)
+		if Done() {
+			break
+		}
+		reply := RequestTask()
+		if !reply.HasTask {
+			continue
+		}
+		if reply.IsMapTask {
+			mapTask := Task{
+				IsMapTask: reply.IsMapTask,
+				FilePath:  reply.MapFile,
+				Index:     reply.index,
+			}
+			Map(mapf, mapTask, reply.NReducer)
+		} else {
+			reduceTask := Task{
+				IsMapTask: reply.IsMapTask,
+				Index:     reply.index,
+			}
+			Reduce(reducef, reduceTask, reply.NMapper)
+		}
 
-	// uncomment to send the Example RPC to the master.
-	// CallExample()
+		SubmitTask(reply.index, reply.IsMapTask)
+	}
 
 }
 
@@ -141,22 +165,29 @@ func Reduce(reducef func(string, []string) string, reduceTask Task, NMap int) {
 //
 // the RPC argument and reply types are defined in rpc.go.
 //
-func CallExample() {
+func RequestTask() RequestTaskReply {
+	args := RequestTaskArgs{}
+	reply := RequestTaskReply{}
+	call("Master.RequestTask", &args, &reply)
+	return reply
+}
 
-	// declare an argument structure.
-	args := ExampleArgs{}
+//
+func SubmitTask(index int, isMap bool) {
+	args := SubmitTaskArgs{}
+	reply := SubmitTaskReply{}
+	args.IsMapTask = isMap
+	args.index = index
+	call("Master.SubmitTask", &args, &reply)
+	// no reply need
+}
 
-	// fill in the argument(s).
-	args.X = 99
-
-	// declare a reply structure.
-	reply := ExampleReply{}
-
-	// send the RPC request, wait for the reply.
-	call("Master.Example", &args, &reply)
-
-	// reply.Y should be 100.
-	fmt.Printf("reply.Y %v\n", reply.Y)
+//
+func Done() bool {
+	args := DoneArgs{}
+	reply := DoneReply{}
+	call("Master.DoneQuery", &args, &reply)
+	return reply.IsDone
 }
 
 //

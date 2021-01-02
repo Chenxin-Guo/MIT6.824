@@ -1,29 +1,65 @@
 package mr
 
-import "log"
-import "net"
-import "os"
-import "net/rpc"
-import "net/http"
+import (
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+	"os"
+)
 
-
+//
 type Master struct {
 	// Your definitions here.
-
+	manager   TaskManager
+	isMapDone bool
+	NReduce   int
+	NMapper   int
 }
 
-// Your code here -- RPC handlers for the worker to call.
+//
+func (m *Master) RequestTask(args *RequestTaskArgs, reply *RequestTaskReply) {
+	task := m.manager.GetAssignment()
+	if task == nil {
+		reply.HasTask = false
+	} else {
+		reply.HasTask = true
+		reply.IsMapTask = task.IsMapTask
+		reply.MapFile = task.FilePath
+		reply.index = task.Index
+		reply.NMapper = m.NMapper
+		reply.NReducer = m.NReduce
+	}
+}
 
 //
-// an example RPC handler.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func (m *Master) Example(args *ExampleArgs, reply *ExampleReply) error {
-	reply.Y = args.X + 1
+func (m *Master) SubmitTask(args *SubmitTaskArgs, reply *SubmitTaskReply) error {
+	if !m.isMapDone {
+		if args.IsMapTask {
+			m.manager.RemoveTask(args.index)
+		} else {
+			return nil
+		}
+		if m.manager.Done() {
+			m.isMapDone = true
+			for i := 0; i < m.NReduce; i++ {
+				m.manager.AddReduceTask(i)
+			}
+		}
+	} else {
+		if args.IsMapTask {
+			return nil
+		} else {
+			m.manager.RemoveTask(args.index)
+		}
+	}
 	return nil
 }
 
+//
+func (m *Master) DoneQuery(args *DoneArgs, reply *DoneReply) {
+	reply.IsDone = m.Done()
+}
 
 //
 // start a thread that listens for RPCs from worker.go
@@ -46,12 +82,7 @@ func (m *Master) server() {
 // if the entire job has finished.
 //
 func (m *Master) Done() bool {
-	ret := false
-
-	// Your code here.
-
-
-	return ret
+	return m.manager.Done()
 }
 
 //
@@ -60,10 +91,14 @@ func (m *Master) Done() bool {
 // nReduce is the number of reduce tasks to use.
 //
 func MakeMaster(files []string, nReduce int) *Master {
-	m := Master{}
-
+	m := Master{
+		NReduce: nReduce,
+		NMapper: len(files),
+	}
+	for i := 0; i < len(files); i++ {
+		m.manager.AddMapTask(i, files[i])
+	}
 	// Your code here.
-
 
 	m.server()
 	return &m

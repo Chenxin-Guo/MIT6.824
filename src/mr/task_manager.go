@@ -91,3 +91,10 @@ func (t *TaskManager) Done() bool {
 	}
 	return false
 }
+
+//
+func NewTaskManager() *TaskManager {
+	return &TaskManager{
+		Tasks: make(map[int]*Task),
+	}
+}

@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -11,35 +12,41 @@ import (
 //
 type Master struct {
 	// Your definitions here.
-	manager   TaskManager
+	manager   *TaskManager
 	isMapDone bool
 	NReduce   int
 	NMapper   int
 }
 
 //
-func (m *Master) RequestTask(args *RequestTaskArgs, reply *RequestTaskReply) {
+func (m *Master) RequestTask(args *RequestTaskArgs, reply *RequestTaskReply) error {
 	task := m.manager.GetAssignment()
+	fmt.Printf("Get %v\n", task)
 	if task == nil {
 		reply.HasTask = false
 	} else {
 		reply.HasTask = true
 		reply.IsMapTask = task.IsMapTask
 		reply.MapFile = task.FilePath
-		reply.index = task.Index
+		reply.Index = task.Index
 		reply.NMapper = m.NMapper
 		reply.NReducer = m.NReduce
 	}
+
+	fmt.Printf(" the index is %v ", reply.Index)
+	return nil
 }
 
 //
 func (m *Master) SubmitTask(args *SubmitTaskArgs, reply *SubmitTaskReply) error {
+	fmt.Printf("Submit task %v\n", args.Index)
 	if !m.isMapDone {
 		if args.IsMapTask {
-			m.manager.RemoveTask(args.index)
+			m.manager.RemoveTask(args.Index)
 		} else {
 			return nil
 		}
+		fmt.Printf("is map done %v/n", m.manager.Done())
 		if m.manager.Done() {
 			m.isMapDone = true
 			for i := 0; i < m.NReduce; i++ {
@@ -50,15 +57,16 @@ func (m *Master) SubmitTask(args *SubmitTaskArgs, reply *SubmitTaskReply) error 
 		if args.IsMapTask {
 			return nil
 		} else {
-			m.manager.RemoveTask(args.index)
+			m.manager.RemoveTask(args.Index)
 		}
 	}
 	return nil
 }
 
 //
-func (m *Master) DoneQuery(args *DoneArgs, reply *DoneReply) {
+func (m *Master) DoneQuery(args *DoneArgs, reply *DoneReply) error {
 	reply.IsDone = m.Done()
+	return nil
 }
 
 //
@@ -92,8 +100,10 @@ func (m *Master) Done() bool {
 //
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
-		NReduce: nReduce,
-		NMapper: len(files),
+		manager:   NewTaskManager(),
+		isMapDone: false,
+		NReduce:   nReduce,
+		NMapper:   len(files),
 	}
 	for i := 0; i < len(files); i++ {
 		m.manager.AddMapTask(i, files[i])

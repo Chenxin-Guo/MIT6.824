@@ -51,6 +51,7 @@ func Worker(mapf func(string, string) []KeyValue,
 			break
 		}
 		reply := RequestTask()
+		fmt.Printf("Ask for task, this reply is %v\n", reply)
 		if !reply.HasTask {
 			continue
 		}
@@ -58,18 +59,20 @@ func Worker(mapf func(string, string) []KeyValue,
 			mapTask := Task{
 				IsMapTask: reply.IsMapTask,
 				FilePath:  reply.MapFile,
-				Index:     reply.index,
+				Index:     reply.Index,
 			}
 			Map(mapf, mapTask, reply.NReducer)
+			fmt.Print("Finish the mapping task")
 		} else {
 			reduceTask := Task{
 				IsMapTask: reply.IsMapTask,
-				Index:     reply.index,
+				Index:     reply.Index,
 			}
 			Reduce(reducef, reduceTask, reply.NMapper)
+			fmt.Print("Finish the reducing task")
 		}
 
-		SubmitTask(reply.index, reply.IsMapTask)
+		SubmitTask(reply.Index, reply.IsMapTask)
 	}
 
 }
@@ -177,7 +180,7 @@ func SubmitTask(index int, isMap bool) {
 	args := SubmitTaskArgs{}
 	reply := SubmitTaskReply{}
 	args.IsMapTask = isMap
-	args.index = index
+	args.Index = index
 	call("Master.SubmitTask", &args, &reply)
 	// no reply need
 }

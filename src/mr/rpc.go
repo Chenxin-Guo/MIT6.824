@@ -34,7 +34,7 @@ type RequestTaskReply struct {
 	// True if the task is a map task, otherwise it is a reduce task.
 	IsMapTask bool
 	// The index of the task.
-	index int
+	Index int
 	// Number of mapper of this MapReduce Job.
 	NMapper int
 	// Number of reducer of this MapReduce Job.
@@ -48,7 +48,7 @@ type SubmitTaskArgs struct {
 	// True if the task to be submitted is a map task, otherwise is a reduce task.
 	IsMapTask bool
 	// The index of the task.
-	index int
+	Index int
 }
 
 // SubmitTaskReply is the Reply Message for SubmitTask

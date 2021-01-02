@@ -16,6 +16,8 @@ type Task struct {
 	AssignTime time.Time
 	// The file to be mapped, only valid if IsMapTask is True.
 	FilePath string
+	// The index of the task
+	Index int
 }
 
 // TaskManager manages unfinished map/reduce tasks
@@ -37,6 +39,7 @@ func (t *TaskManager) AddMapTask(index int, mapFile string) error {
 		IsMapTask:  true,
 		IsAssigned: false,
 		FilePath:   mapFile,
+		Index:      index,
 	}
 	return nil
 }
@@ -51,6 +54,7 @@ func (t *TaskManager) AddReduceTask(index int) error {
 	t.Tasks[index] = &Task{
 		IsMapTask:  false,
 		IsAssigned: false,
+		Index:      index,
 	}
 	return nil
 }

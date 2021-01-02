@@ -1,11 +1,23 @@
 package mr
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io/ioutil"
 	"log"
 	"net/rpc"
+	"os"
+	"sort"
 )
+
+// for sorting by key.
+type ByKey []KeyValue
+
+// for sorting by key.
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 //
 // Map functions return a slice of KeyValue.
@@ -38,12 +50,90 @@ func Worker(mapf func(string, string) []KeyValue,
 
 }
 
-func Map(mapf func(string, string) []KeyValue, mapTask mr.Task) {
+// Map is to map key value into a file with mr-%v-%v.json format
+func Map(mapf func(string, string) []KeyValue, mapTask Task, NReducer int) {
+	encs := make([]*json.Encoder, NReducer)
+	fs := make([]*os.File, NReducer)
+
+	for i := 0; i < NReducer; i++ {
+		oname := fmt.Sprintf("mr-%v-%v.json", mapTask.Index, i)
+		f, err := os.Create(oname)
+		if err != nil {
+			log.Fatalf("Cannot open file %v", oname)
+		}
+		enc := json.NewEncoder(f)
+		fs[i] = f
+		encs[i] = enc
+	}
+
+	file, err := os.Open(mapTask.FilePath)
+	defer file.Close()
+	if err != nil {
+		log.Fatalf("cannot open %v", mapTask.FilePath)
+	}
+	content, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatalf("cannot read %v", mapTask.FilePath)
+	}
+
+	kva := mapf(mapTask.FilePath, string(content))
+
+	for _, kv := range kva {
+		id := ihash(kv.Key) % NReducer
+		enc := encs[id]
+		err := enc.Encode(&kv)
+		if err != nil {
+			log.Fatalf("Cannot encode Key-Value pair %v", kv)
+		}
+	}
+	for i := 0; i < NReducer; i++ {
+		fs[i].Close()
+	}
 
 }
 
-func Reduce(reducef func(string, []string) string, reduceTask mr.Task) {
+// Reduce function is to sort the key in files and reduce
+func Reduce(reducef func(string, []string) string, reduceTask Task, NMap int) {
+	kva := make([]KeyValue, 0)
+	for i := 0; i < NMap; i++ {
+		oname := fmt.Sprintf("mr-%v-%v.json", i, reduceTask.Index)
+		f, err := os.Open(oname)
+		defer f.Close()
+		if err != nil {
+			log.Fatalf("cannot open %v", oname)
+		}
+		dec := json.NewDecoder(f)
+		for {
+			var kv KeyValue
+			if err := dec.Decode(&kv); err != nil {
+				break
+			}
+			kva = append(kva, kv)
 
+		}
+	}
+	sort.Sort(ByKey(kva))
+	oname := fmt.Sprintf("mr-out-%v", reduceTask.Index)
+	ofile, _ := os.Create(oname)
+
+	i := 0
+	for i < len(kva) {
+		j := i + 1
+		for j < len(kva) && kva[j].Key == kva[i].Key {
+			j++
+		}
+		values := []string{}
+		for k := i; k < j; k++ {
+			values = append(values, kva[k].Value)
+		}
+		output := reducef(kva[i].Key, values)
+
+		// this is the correct format for each line of Reduce output.
+		fmt.Fprintf(ofile, "%v %v\n", kva[i].Key, output)
+
+		i = j
+	}
+	ofile.Close()
 }
 
 //
